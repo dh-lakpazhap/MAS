@@ -11,9 +11,14 @@
 
 import subprocess
 from pathlib import Path
-
-import pandas as pd
 import streamlit as st
+
+st.set_page_config(
+    page_title="Трекер публикаций",
+    page_icon="📚",
+    layout="wide",
+)
+import pandas as pd
 import streamlit.components.v1 as components
 
 # Импорт основной функции обработки из main.py (файлы лежат в одной папке).
@@ -106,12 +111,6 @@ def _provider_input(label: str, name: str, field: str, **kwargs):
     if key not in st.session_state:
         st.session_state[key] = st.session_state["provider_drafts"][name].get(field) or ""
     st.text_input(label, key=key, **kwargs)
-
-st.set_page_config(
-    page_title="Трекер публикаций",
-    page_icon="📚",
-    layout="wide",
-)
 
 cfg = load_config()
 if "provider_drafts" not in st.session_state:
