@@ -60,6 +60,7 @@ def load_config() -> Dict:
 
 def save_model_settings(engine: str, providers: Dict) -> None:
     """Записать активного провайдера и блоки ``llm`` / ``providers`` в config.yaml."""
+    providers = {name: {k: v for k, v in values.items() if k in ("base_url", "model", "api_key_env")} for name, values in providers.items()}
     active = providers.get(engine) or providers.get("ollama") or {}
     public_llm = {key: value for key, value in active.items() if value}
     block = "# Чем строить резюме: sumy, ollama или openai.\n" + yaml.safe_dump(
@@ -179,3 +180,13 @@ def update_history(new_ids: List[str]):
             json.dump(deduped, f, ensure_ascii=False, indent=2)
     except Exception as e:
         logger.error(f"Failed to write history file: {e}")
+
+
+
+def redact_secrets(value):
+    """Mask secret values recursively before presenting configuration."""
+    if isinstance(value, dict):
+        return {k: ("••••••" if any(word in str(k).lower() for word in ("password", "secret", "token", "api_key")) and not str(k).endswith("_env") else redact_secrets(v)) for k, v in value.items()}
+    if isinstance(value, list):
+        return [redact_secrets(v) for v in value]
+    return value

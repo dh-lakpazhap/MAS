@@ -25,7 +25,7 @@ import streamlit.components.v1 as components
 from main import process_items
 from summarizer import llm_unavailable_message
 from scraper import SOURCE_NAMES
-from utils import HISTORY_PATH, get_history, load_config, resolve_date_range, save_model_settings
+from utils import HISTORY_PATH, get_history, load_config, resolve_date_range, redact_secrets
 import nltk
 
 
@@ -185,6 +185,10 @@ with st.sidebar:
         min_value=5, max_value=100, value=20, step=5,
     )
 
+    validation_mode = st.selectbox("Проверка темы", ["keywords", "llm"], format_func=lambda x: {"keywords": "По словам", "llm": "По смыслу — LLM"}[x])
+    if validation_mode == "llm":
+        st.caption("Модель оценивает название и аннотацию. Нужна подключённая LLM; запросы могут тарифицироваться провайдером. Поиск кандидатов в базах остаётся по словам.")
+
     st.subheader("Резюме")
     engine = st.session_state["provider"]
     if engine == "sumy":
@@ -244,13 +248,7 @@ with st.sidebar:
     )
 
     with st.expander("Полная конфигурация (config.yaml)"):
-        safe_cfg = dict(cfg)
-        if "email" in safe_cfg:
-            safe_cfg["email"] = {
-                k: ("••••••" if k == "password" else v)
-                for k, v in safe_cfg["email"].items()
-            }
-        st.json(safe_cfg)
+        st.json(redact_secrets(cfg))
 
 # ---------------------------------------------------------------------------
 # Основная область
@@ -286,6 +284,7 @@ with tab_search:
                     topics=topics,
                     sources=sources,
                     rows=rows,
+                    validation_mode=validation_mode,
                     skip_seen=skip_seen,
                     save_history=save_history,
                     max_sentences=max_sentences,
@@ -322,6 +321,13 @@ with tab_search:
                 "Попробуйте выключить «Пропускать уже просмотренные» или изменить темы."
             )
         else:
+            available_topics = sorted({t for r in results for t in r.get("matched_topics", [])})
+            selected_topics = st.multiselect("Фильтр по совпавшим темам", available_topics)
+            results = [r for r in results if not selected_topics or set(selected_topics).intersection(r.get("matched_topics", []))]
+            topic_order = st.checkbox("Сортировать по теме")
+            if topic_order:
+                results = sorted(results, key=lambda r: ", ".join(r.get("matched_topics", [])))
+            st.caption(f"Показано: {len(results)}")
             tab_cards, tab_table = st.tabs(["🗂 Карточки", "📋 Таблица"])
             with tab_cards:
                 for i, r in enumerate(results, start=1):
@@ -332,7 +338,14 @@ with tab_search:
                         src = SOURCE_NAMES.get(r.get("source"), r.get("source") or "—")
                         st.markdown(f"🔗 [{r['url']}]({r['url']})")
                         st.markdown(f"**Источник:** {src}")
-                        st.markdown(f"**Идентификатор:** `{r['identifier']}`")
+                        st.markdown("**Темы:** " + ", ".join(r.get("matched_topics", [])))
+                        st.caption("Проверка: " + r.get("validation_method", "—"))
+                        if r.get("validation_reason"):
+                            st.write(r["validation_reason"])
+                        st.caption("Дата публикации: " + str(r.get("published") or r.get("year") or "не указана"))
+                        if st.checkbox("Показать подробности", key=f"details_{i}"):
+                            st.code(r.get("identifier", ""))
+                            st.write(r.get("abstract") or "Аннотация отсутствует")
                         st.markdown("**Резюме:**")
                         if r.get("summary"):
                             st.write(r["summary"])
@@ -342,6 +355,8 @@ with tab_search:
             with tab_table:
                 df = pd.DataFrame(results).rename(
                     columns={
+                        "matched_topics": "Темы",
+                        "validation_method": "Проверка",
                         "source": "Источник",
                         "identifier": "Идентификатор",
                         "title": "Название",
@@ -378,7 +393,7 @@ with tab_providers:
     st.header("Провайдеры модели")
     st.caption(
         "Выбранный провайдер строит резюме в этом сеансе сразу. "
-        "Планировщик читает config.yaml после сохранения."
+        "Ключ хранится только в текущем сеансе и не записывается в config.yaml."
     )
     st.radio(
         "Активный провайдер",
@@ -423,17 +438,24 @@ with tab_providers:
             else:
                 st.warning(st.session_state["provider_check"])
 
-    if st.button("Сохранить в config.yaml", type="primary", key="save_providers"):
-        save_model_settings(st.session_state["provider"], _collect_providers())
-        st.success("Провайдеры сохранены в config.yaml.")
+    st.info("Настройки применяются только к вашему сеансу. Сохранение общей конфигурации через web-интерфейс отключено. Серверные ключи задаются владельцем приложения в Secrets.")
 
 with tab_diagram:
-    diagram_path = Path(__file__).parent / "diagr" / "agents.html"
-    if not diagram_path.is_file():
-        st.warning("Файл схемы diagr/agents.html не найден.")
-    else:
-        components.html(
-            diagram_path.read_text(encoding="utf-8"),
-            height=900,
-            scrolling=True,
-        )
+    components.html("""
+    <style>body{font:16px system-ui;color:#172554;background:#f8fafc;padding:16px}
+    .box{border:1px solid #94a3b8;border-radius:12px;padding:16px;text-align:center;background:white}
+    .arrow{text-align:center;color:#64748b;font-size:24px;padding:5px}.sources{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}.sources span{background:#dbeafe;padding:8px;border-radius:8px}</style>
+    <div class="box">Пользователь · темы, даты, источники, режим проверки</div><div class="arrow">↓</div>
+    <div class="box">Оркестратор main.py → координатор scraper.py</div><div class="arrow">↓</div>
+    <div class="box sources"><span>archive.org</span><span>arXiv</span><span>PubMed</span><span>Europe PMC</span><span>Semantic Scholar</span></div><div class="arrow">↓</div>
+    <div class="box">Единый формат записи → проверка истории → валидатор<br>Совпадение слов ИЛИ LLM: название + аннотация</div><div class="arrow">↓</div>
+    <div class="box">Принятые статьи и совпавшие темы → резюме Sumy / LLM</div><div class="arrow">↓</div>
+    <div class="box">Карточки · таблица · фильтр и сортировка по темам</div>
+    """, height=630, scrolling=True)
+    st.subheader("Роли компонентов")
+    st.write("Пользователь → оркестратор (main.py) → координатор (scraper.py)")
+    st.write("Источники: " + ", ".join(SOURCE_NAMES.values()))
+    st.write("Каждый источник: запрос API → единый формат записи → проверка истории → валидатор")
+    st.write("Валидатор: совпадение слов ИЛИ LLM-проверка названия и аннотации → совпавшие темы и объяснение")
+    st.write("Принятые записи → суммаризатор (Sumy или LLM) → карточки и таблица → фильтр по темам")
+    st.caption("Порядок этапов задан Python-кодом. LLM не выбирает инструменты. Почтовая отправка в интерфейсе отключена.")

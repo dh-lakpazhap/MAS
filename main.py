@@ -76,6 +76,7 @@ def process_items(
     topics: Optional[List[str]] = None,
     sources: Optional[List[str]] = None,
     rows: int = 20,
+    validation_mode: str = "keywords",
     skip_seen: bool = True,
     save_history: bool = True,
     max_sentences: int = 3,
@@ -111,6 +112,8 @@ def process_items(
     if llm_notice:
         logger.warning(llm_notice)
         engine = "sumy"
+    if validation_mode == "llm" and (engine == "sumy" or llm_notice):
+        raise ValueError("Для смысловой проверки выберите доступную LLM. Sumy не выполняет такую проверку.")
     process_items.last_llm_notice = llm_notice
     if send is None:
         send = bool(cfg.get("send_email", False))
@@ -134,6 +137,7 @@ def process_items(
 
     new_items = get_new_items(
         topics=topics, sources=sources, rows=rows,
+        validation_mode=validation_mode, validation_llm=llm,
         skip_seen=skip_seen, save_history=save_history,
         date_from=date_from, date_to=date_to,
     )
@@ -212,3 +216,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

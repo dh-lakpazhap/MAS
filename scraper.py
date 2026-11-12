@@ -39,6 +39,8 @@ def get_new_items(
     topics: Optional[List[str]] = None,
     sources: Optional[List[str]] = None,
     rows: int = 20,
+    validation_mode: str = "keywords",
+    validation_llm: Optional[Dict] = None,
     skip_seen: bool = True,
     save_history: bool = True,
     date_from: Optional[date] = None,
@@ -94,7 +96,7 @@ def get_new_items(
                 logger.info(f"⏭ [{n}/{len(items)}] {it['identifier']}: уже в истории – пропуск")
                 continue
             logger.info(f"[{n}/{len(items)}] «{it['title'][:90]}»")
-            if validate_item(it, topics):
+            if validate_item(it, topics, mode=validation_mode, llm=validation_llm):
                 new_items.append(it)
                 accepted += 1
             else:
@@ -115,3 +117,4 @@ def get_new_items(
 if __name__ == "__main__":
     for item in get_new_items():
         print(item["source"], item["title"], item["url"])
+
