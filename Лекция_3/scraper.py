@@ -13,8 +13,11 @@ import logging
 from datetime import date
 from typing import Dict, List, Optional
 
+import pubmed_agent
 import archive_agent
 import arxiv_agent
+import europepmc_agent
+import semantic_scholar_agent
 from utils import load_config, get_history, update_history, resolve_date_range
 from validator import validate_item  # валидатор релевантности
 
@@ -24,6 +27,9 @@ logger = logging.getLogger("archiv_tracker.scraper")
 SOURCES = {
     archive_agent.SOURCE_ID: archive_agent,
     arxiv_agent.SOURCE_ID: arxiv_agent,
+    pubmed_agent.SOURCE_ID: pubmed_agent,
+    europepmc_agent.SOURCE_ID: europepmc_agent,
+    semantic_scholar_agent.SOURCE_ID: semantic_scholar_agent,
 }
 # Человекочитаемые названия источников (для интерфейса)
 SOURCE_NAMES = {sid: mod.SOURCE_NAME for sid, mod in SOURCES.items()}

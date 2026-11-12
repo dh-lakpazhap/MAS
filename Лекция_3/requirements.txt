@@ -5,3 +5,4 @@ pyyaml==6.0.2
 sumy==0.11.0
 apscheduler==3.10.4
 streamlit==1.38.0
+nltk

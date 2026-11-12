@@ -1,7 +1,15 @@
+# Окружения Python
 .venv/
+venv/
+
+# Секреты
+.env
+.env.*
+!.env.example
+.streamlit/secrets.toml
+
+# Временные файлы
 __pycache__/
-*.py[cod]
+*.pyc
 main.log
 history.json
-diagr/agents.visual-check.*
-.DS_Store

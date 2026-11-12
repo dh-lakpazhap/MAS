@@ -3,12 +3,15 @@
 
 # List of keywords or topics to monitor on archiv.org
 topics:
-  - "medical multi-agent"
+  - "machine learning"
 
 # Подключённые источники поиска (по умолчанию). Доступно: archive, arxiv
 sources:
   - "archive"
   - "arxiv"
+  - "pubmed"
+  - "europepmc"
+  - "semantic_scholar"
 
 # Чем строить резюме: sumy, ollama или openai.
 summarizer: sumy

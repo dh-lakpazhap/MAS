@@ -21,7 +21,15 @@ from main import process_items
 from summarizer import llm_unavailable_message
 from scraper import SOURCE_NAMES
 from utils import HISTORY_PATH, get_history, load_config, resolve_date_range, save_model_settings
+import nltk
 
+
+@st.cache_resource
+def prepare_nltk():
+    nltk.download("punkt_tab", quiet=True, raise_on_error=True)
+
+
+prepare_nltk()
 PROVIDER_LABELS = {
     "sumy": "Sumy",
     "ollama": "Ollama",
