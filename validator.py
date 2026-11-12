@@ -133,9 +133,13 @@ def validate_item(item: Dict, topics: List[str], mode="keywords", llm=None) -> b
     else:
         text = str(item.get("title") or "") + "\n" + str(item.get("abstract") or "")
         matches = [t for t in topics if _find_topic(text, [t])]
-        if not matches and item.get("source") == "archive":
-            text = extract_text_from_url(item["url"])
-            matches = [t for t in topics if _find_topic(text, [t])]
+        if item.get("source") == "archive" and len(matches) < len(topics):
+            page_text = extract_text_from_url(item["url"])
+            combined_text = text + "\n" + page_text
+            matches = [
+                t for t in topics
+                if _find_topic(combined_text, [t])
+            ]
         item["matched_topics"] = matches
         item["validation_method"] = "Совпадение слов"
     return bool(item["matched_topics"])
