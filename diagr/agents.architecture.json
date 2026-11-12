@@ -11,111 +11,355 @@
       "type": "frontend",
       "label": "Панель",
       "sublabel": "streamlit_app.py",
-      "pos": [80, 72],
-      "size": [220, 78]
+      "pos": [
+        80,
+        72
+      ],
+      "size": [
+        330,
+        90
+      ]
     },
     {
       "id": "orchestrator",
       "type": "backend",
       "label": "Оркестратор",
       "sublabel": "main.process_items",
-      "pos": [420, 72],
-      "size": [220, 78]
+      "pos": [
+        480,
+        72
+      ],
+      "size": [
+        330,
+        90
+      ]
     },
     {
-      "id": "notifier",
+      "id": "scraper",
       "type": "backend",
-      "label": "Нотификатор",
-      "sublabel": "SMTP, сейчас выкл",
-      "pos": [760, 424],
-      "size": [220, 78]
+      "label": "Координатор поиска",
+      "sublabel": "scraper.get_new_items",
+      "pos": [
+        880,
+        72
+      ],
+      "size": [
+        330,
+        90
+      ]
     },
     {
       "id": "archiveAgent",
       "type": "backend",
       "label": "Агент archive.org",
-      "sublabel": "publicdate",
-      "pos": [80, 248],
-      "size": [220, 78]
-    },
-    {
-      "id": "scraper",
-      "type": "backend",
-      "label": "Скрапер",
-      "sublabel": "координатор источников",
-      "pos": [420, 248],
-      "size": [220, 78]
+      "sublabel": "archive_agent.fetch",
+      "pos": [
+        80,
+        252
+      ],
+      "size": [
+        330,
+        90
+      ]
     },
     {
       "id": "arxivAgent",
       "type": "backend",
       "label": "Агент arXiv",
-      "sublabel": "submittedDate",
-      "pos": [760, 248],
-      "size": [220, 78]
+      "sublabel": "arxiv_agent.fetch",
+      "pos": [
+        480,
+        252
+      ],
+      "size": [
+        330,
+        90
+      ]
+    },
+    {
+      "id": "pubmedAgent",
+      "type": "backend",
+      "label": "Агент PubMed",
+      "sublabel": "pubmed_agent.fetch",
+      "pos": [
+        880,
+        252
+      ],
+      "size": [
+        330,
+        90
+      ]
+    },
+    {
+      "id": "europepmcAgent",
+      "type": "backend",
+      "label": "Агент Europe PMC",
+      "sublabel": "europepmc_agent.fetch",
+      "pos": [
+        80,
+        432
+      ],
+      "size": [
+        330,
+        90
+      ]
+    },
+    {
+      "id": "semanticAgent",
+      "type": "backend",
+      "label": "Агент Semantic Scholar",
+      "sublabel": "semantic_scholar_agent.fetch",
+      "pos": [
+        480,
+        432
+      ],
+      "size": [
+        330,
+        90
+      ]
     },
     {
       "id": "validator",
       "type": "backend",
       "label": "Валидатор",
-      "sublabel": "все слова темы",
-      "pos": [420, 424],
-      "size": [220, 78]
+      "sublabel": "Слова / LLM: название и аннотация",
+      "pos": [
+        880,
+        432
+      ],
+      "size": [
+        330,
+        90
+      ]
     },
     {
       "id": "summarizer",
       "type": "backend",
       "label": "Суммаризатор",
-      "sublabel": "sumy LSA",
-      "pos": [760, 72],
-      "size": [220, 78]
+      "sublabel": "Sumy LSA / LLM",
+      "pos": [
+        80,
+        612
+      ],
+      "size": [
+        330,
+        90
+      ]
+    },
+    {
+      "id": "notifier",
+      "type": "backend",
+      "label": "Нотификатор",
+      "sublabel": "SMTP; в web-интерфейсе выключен",
+      "pos": [
+        480,
+        612
+      ],
+      "size": [
+        330,
+        90
+      ]
+    },
+    {
+      "id": "history",
+      "type": "backend",
+      "label": "История",
+      "sublabel": "history.json",
+      "pos": [
+        880,
+        612
+      ],
+      "size": [
+        330,
+        90
+      ]
     }
   ],
   "boundaries": [
     {
       "kind": "region",
-      "label": "Локальные агенты",
-      "wraps": ["panel", "orchestrator", "notifier", "archiveAgent", "scraper", "arxivAgent", "validator", "summarizer"]
+      "label": "Компоненты приложения; порядок задан Python",
+      "wraps": [
+        "panel",
+        "orchestrator",
+        "scraper",
+        "archiveAgent",
+        "arxivAgent",
+        "pubmedAgent",
+        "europepmcAgent",
+        "semanticAgent",
+        "validator",
+        "summarizer",
+        "notifier",
+        "history"
+      ]
     }
   ],
   "connections": [
-    { "id": "panel-run", "from": "panel", "to": "orchestrator", "label": "запуск", "variant": "emphasis", "labelDy": 22 },
-    { "id": "orch-result", "from": "orchestrator", "to": "panel", "label": "результат", "labelDy": -22 },
-    { "id": "orch-mail", "from": "orchestrator", "to": "notifier", "label": "почта выкл", "variant": "dashed", "fromSide": "top", "toSide": "right", "via": [[530, 36], [1048, 36], [1048, 463]], "labelAt": [1112, 250] },
-    { "id": "orch-search", "from": "orchestrator", "to": "scraper", "label": "темы и даты", "variant": "emphasis", "labelDx": -46, "labelDy": 28 },
-    { "id": "search-accepted", "from": "scraper", "to": "orchestrator", "label": "принятые", "labelDx": 42 },
-    { "id": "search-archive", "from": "scraper", "to": "archiveAgent", "label": "fetch", "labelDy": 22 },
-    { "id": "archive-items", "from": "archiveAgent", "to": "scraper", "label": "записи", "labelDy": -22 },
-    { "id": "search-arxiv", "from": "scraper", "to": "arxivAgent", "label": "fetch", "labelDy": 22 },
-    { "id": "arxiv-items", "from": "arxivAgent", "to": "scraper", "label": "записи", "labelDy": -22 },
-    { "id": "search-check", "from": "scraper", "to": "validator", "label": "запись", "variant": "emphasis", "labelDx": -48, "labelDy": 28 },
-    { "id": "check-answer", "from": "validator", "to": "scraper", "label": "да или нет", "labelDx": 58 },
-    { "id": "orch-text", "from": "orchestrator", "to": "summarizer", "label": "текст", "labelDy": -22 },
-    { "id": "summary-back", "from": "summarizer", "to": "orchestrator", "label": "резюме", "labelDy": 22 }
+    {
+      "id": "connection-0",
+      "from": "panel",
+      "to": "orchestrator",
+      "label": "Параметры запуска",
+      "variant": "default"
+    },
+    {
+      "id": "connection-1",
+      "from": "orchestrator",
+      "to": "panel",
+      "label": "Карточки, темы, резюме",
+      "variant": "default"
+    },
+    {
+      "id": "connection-2",
+      "from": "orchestrator",
+      "to": "scraper",
+      "label": "Темы, даты, режим проверки",
+      "variant": "default"
+    },
+    {
+      "id": "connection-3",
+      "from": "scraper",
+      "to": "orchestrator",
+      "label": "Принятые записи и темы",
+      "variant": "default"
+    },
+    {
+      "id": "connection-4",
+      "from": "scraper",
+      "to": "validator",
+      "label": "Публикация и темы",
+      "variant": "default"
+    },
+    {
+      "id": "connection-5",
+      "from": "validator",
+      "to": "scraper",
+      "label": "Совпавшие темы; объяснение LLM",
+      "variant": "default"
+    },
+    {
+      "id": "connection-6",
+      "from": "orchestrator",
+      "to": "summarizer",
+      "label": "Текст",
+      "variant": "default"
+    },
+    {
+      "id": "connection-7",
+      "from": "summarizer",
+      "to": "orchestrator",
+      "label": "Резюме",
+      "variant": "default"
+    },
+    {
+      "id": "connection-8",
+      "from": "orchestrator",
+      "to": "notifier",
+      "label": "Только если отправка включена",
+      "variant": "dashed"
+    },
+    {
+      "id": "connection-9",
+      "from": "scraper",
+      "to": "history",
+      "label": "Чтение / запись, если включено",
+      "variant": "default"
+    },
+    {
+      "id": "connection-10",
+      "from": "scraper",
+      "to": "archiveAgent",
+      "label": "fetch",
+      "variant": "default"
+    },
+    {
+      "id": "connection-11",
+      "from": "archiveAgent",
+      "to": "scraper",
+      "label": "Записи",
+      "variant": "default"
+    },
+    {
+      "id": "connection-12",
+      "from": "scraper",
+      "to": "arxivAgent",
+      "label": "fetch",
+      "variant": "default"
+    },
+    {
+      "id": "connection-13",
+      "from": "arxivAgent",
+      "to": "scraper",
+      "label": "Записи",
+      "variant": "default"
+    },
+    {
+      "id": "connection-14",
+      "from": "scraper",
+      "to": "pubmedAgent",
+      "label": "fetch",
+      "variant": "default"
+    },
+    {
+      "id": "connection-15",
+      "from": "pubmedAgent",
+      "to": "scraper",
+      "label": "Записи",
+      "variant": "default"
+    },
+    {
+      "id": "connection-16",
+      "from": "scraper",
+      "to": "europepmcAgent",
+      "label": "fetch",
+      "variant": "default"
+    },
+    {
+      "id": "connection-17",
+      "from": "europepmcAgent",
+      "to": "scraper",
+      "label": "Записи",
+      "variant": "default"
+    },
+    {
+      "id": "connection-18",
+      "from": "scraper",
+      "to": "semanticAgent",
+      "label": "fetch",
+      "variant": "default"
+    },
+    {
+      "id": "connection-19",
+      "from": "semanticAgent",
+      "to": "scraper",
+      "label": "Записи",
+      "variant": "default"
+    }
   ],
   "cards": [
     {
       "dot": "cyan",
-      "title": "Запуск",
-      "items": [
-        "Панель передаёт темы, источники и диапазон дат",
-        "Оркестратор проводит один цикл обработки"
-      ]
-    },
-    {
-      "dot": "emerald",
       "title": "Поиск",
       "items": [
-        "Скрапер вызывает fetch и получает записи назад",
-        "В записи есть название, ссылка и аннотация"
+        "Пять доступных источников; вызываются выбранные пользователем",
+        "Поиск кандидатов в источниках — по словам"
       ]
     },
     {
       "dot": "violet",
-      "title": "Проверка и резюме",
+      "title": "Проверка",
       "items": [
-        "Валидатор отвечает скраперу: тема есть или нет",
-        "Резюме возвращается оркестратору и затем на панель"
+        "Режим по словам ИЛИ оценка LLM по названию и аннотации",
+        "Модель не выбирает инструменты; полный текст не гарантирован"
+      ]
+    },
+    {
+      "dot": "emerald",
+      "title": "Результат",
+      "items": [
+        "Темы, фильтр и сортировка по темам",
+        "Идентификатор — в подробностях; резюме Sumy или LLM"
       ]
     }
   ]
