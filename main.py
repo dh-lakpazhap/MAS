@@ -153,14 +153,20 @@ def process_items(
         result = dict(item, summary="", status="")
 
         abstract = item.get("abstract") or ""
-        if len(abstract) >= 200:
+
+        if abstract.strip():
             raw_text = abstract[:text_limit]
-            logger.info(f"   Текст: аннотация из метаданных, {len(raw_text)} символов")
+
+        elif item.get("source") in (
+            "pubmed", "europepmc", "semantic_scholar", "arxiv"
+        ):
+            result["status"] = "Аннотация отсутствует"
+            results.append(result)
+            continue
+
         else:
-            t1 = time.time()
-            logger.info(f"   Загрузка страницы {item['url']} …")
-            raw_text = extract_text_from_url(item["url"])[:text_limit]  # обрезаем текст ради скорости
-            logger.info(f"   Текст: со страницы, {len(raw_text)} символов ({time.time() - t1:.1f} с)")
+            raw_text = extract_text_from_url(item["url"])[:text_limit]        
+        
         if not raw_text:
             logger.warning(f"   ⚠️ Текст не получен – публикация пропущена")
             result["status"] = "Не удалось извлечь текст"

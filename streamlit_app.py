@@ -8,7 +8,7 @@
 - Схема агентов открывается на отдельной вкладке.
 - Отправка на почту в тестовом режиме отключена.
 """
-
+import html
 import subprocess
 from pathlib import Path
 import streamlit as st
@@ -23,6 +23,7 @@ import streamlit.components.v1 as components
 
 # Импорт основной функции обработки из main.py (файлы лежат в одной папке).
 from main import process_items
+from reading_list import article_key, set_flag, export_collection, import_collection
 from summarizer import llm_unavailable_message
 from scraper import SOURCE_NAMES
 from utils import HISTORY_PATH, get_history, load_config, resolve_date_range, redact_secrets
@@ -111,6 +112,24 @@ def _provider_input(label: str, name: str, field: str, **kwargs):
     if key not in st.session_state:
         st.session_state[key] = st.session_state["provider_drafts"][name].get(field) or ""
     st.text_input(label, key=key, **kwargs)
+
+st.session_state.setdefault("reading_list", {})
+
+
+def _set_reading_flag(item, flag, widget_key):
+    set_flag(st.session_state["reading_list"], item, flag, st.session_state[widget_key])
+
+
+def _reading_controls(item, prefix):
+    ident = article_key(item)
+    entry = st.session_state["reading_list"].get(ident, {})
+    left, right = st.columns(2)
+    for column, flag, label in ((left, "saved", "Сохранить"), (right, "read", "Просмотрено")):
+        widget_key = f"reading_{prefix}_{flag}_{ident}"
+        # Synchronize controls between search results and the collection tab.
+        st.session_state[widget_key] = bool(entry.get(flag))
+        column.checkbox(label, key=widget_key, on_change=_set_reading_flag, args=(dict(item), flag, widget_key))
+
 
 cfg = load_config()
 if "provider_drafts" not in st.session_state:
@@ -215,31 +234,14 @@ with st.sidebar:
         help="Сколько символов текста со страницы передавать агенту-суммаризатору.",
     )
 
-    st.subheader("История")
-    skip_seen = st.checkbox(
-        "Пропускать уже просмотренные",
-        value=False,
-        help="Если включено – публикации из history.json не показываются повторно.",
-    )
-    save_history = st.checkbox(
-        "Сохранять найденное в историю",
-        value=False,
-        help="Для проверки лучше выключить, чтобы одни и те же результаты можно было получать снова.",
-    )
-    st.caption(f"В истории сейчас записей: **{len(get_history())}**")
-    if st.button("🗑 Очистить историю", use_container_width=True):
-        HISTORY_PATH.write_text("[]", encoding="utf-8")
-        st.success("История очищена.")
-        st.rerun()
-
-    st.subheader("Почта")
-    st.checkbox(
-        "Отправлять резюме на почту",
-        value=False,
-        disabled=True,
-        help="Отключено на время проверки. Результаты выводятся только в интерфейс.",
-    )
-    st.caption(f"Получатель: {cfg.get('email', {}).get('to_address', '—')}")
+    st.subheader("Моя подборка")
+    hide_read = st.checkbox("Скрывать отмеченные как просмотренные", value=False)
+    saved_count = sum(bool(x.get("saved")) for x in st.session_state["reading_list"].values())
+    read_count = sum(bool(x.get("read")) for x in st.session_state["reading_list"].values())
+    st.caption(f"Сохранено: {saved_count} · Просмотрено: {read_count}")
+    st.caption("Личные отметки хранятся в текущем сеансе. Скачать и восстановить их можно во вкладке «Моя подборка».")
+    skip_seen = False
+    save_history = False
 
     st.subheader("Планировщик")
     st.caption(
@@ -259,8 +261,8 @@ st.caption(
     "🧪 Тестовый режим: письма не отправляются."
 )
 
-tab_search, tab_providers, tab_diagram = st.tabs(
-    ["🔎 Поиск", "🤖 Провайдеры", "🗺 Схема агентов"]
+tab_search, tab_collection, tab_providers, tab_diagram = st.tabs(
+    ["🔎 Поиск", "📌 Моя подборка", "🤖 Провайдеры", "🗺 Схема агентов"]
 )
 
 with tab_search:
@@ -313,20 +315,19 @@ with tab_search:
         c1, c2, c3 = st.columns(3)
         c1.metric("Найдено", len(results))
         c2.metric("С резюме", with_summary)
-        c3.metric("Отправлено на почту", 0)
+        c3.metric("Просмотрено", sum(bool(st.session_state["reading_list"].get(article_key(r), {}).get("read")) for r in results))
 
         if not results:
             st.info(
                 "Новых релевантных публикаций не найдено. "
-                "Попробуйте выключить «Пропускать уже просмотренные» или изменить темы."
+                "Попробуйте изменить темы или диапазон дат."
             )
         else:
+            if hide_read:
+                results = [r for r in results if not st.session_state["reading_list"].get(article_key(r), {}).get("read")]
             available_topics = sorted({t for r in results for t in r.get("matched_topics", [])})
             selected_topics = st.multiselect("Фильтр по совпавшим темам", available_topics)
             results = [r for r in results if not selected_topics or set(selected_topics).intersection(r.get("matched_topics", []))]
-            topic_order = st.checkbox("Сортировать по теме")
-            if topic_order:
-                results = sorted(results, key=lambda r: ", ".join(r.get("matched_topics", [])))
             st.caption(f"Показано: {len(results)}")
             tab_cards, tab_table = st.tabs(["🗂 Карточки", "📋 Таблица"])
             with tab_cards:
@@ -335,23 +336,36 @@ with tab_search:
                     if isinstance(title, list):
                         title = " ".join(title)
                     with st.expander(f"{i}. {title}", expanded=i <= 3):
-                        src = SOURCE_NAMES.get(r.get("source"), r.get("source") or "—")
+                        src = SOURCE_NAMES.get(
+                            r.get("source"), r.get("source") or "—"
+                        )
                         st.markdown(f"🔗 [{r['url']}]({r['url']})")
                         st.markdown(f"**Источник:** {src}")
-                        st.markdown("**Темы:** " + ", ".join(r.get("matched_topics", [])))
-                        st.caption("Проверка: " + r.get("validation_method", "—"))
+                        st.markdown(
+                            "**Темы:** " + ", ".join(r.get("matched_topics", []))
+                        )
+                        st.caption(
+                            "Проверка: " + r.get("validation_method", "—")
+                        )
+
                         if r.get("validation_reason"):
                             st.write(r["validation_reason"])
-                        st.caption("Дата публикации: " + str(r.get("published") or r.get("year") or "не указана"))
-                        if st.checkbox("Показать подробности", key=f"details_{i}"):
-                            st.code(r.get("identifier", ""))
-                            st.write(r.get("abstract") or "Аннотация отсутствует")
+
+                        _reading_controls(r, "search")
                         st.markdown("**Резюме:**")
+
                         if r.get("summary"):
-                            st.write(r["summary"])
+                            st.markdown(
+                                '<div style="font-size:16px; '
+                                'white-space:pre-wrap; overflow-wrap:anywhere;">'
+                                + html.escape(str(r["summary"]))
+                                + "</div>",
+                                unsafe_allow_html=True,
+                            )
                         else:
-                            st.caption("Резюме отсутствует.")
-                        st.caption(f"Статус: {r.get('status', '')}")
+                            st.caption(
+                                r.get("status") or "Резюме отсутствует."
+                            )
             with tab_table:
                 df = pd.DataFrame(results).rename(
                     columns={
@@ -369,6 +383,16 @@ with tab_search:
                     df["Источник"] = df["Источник"].map(
                         lambda sid: SOURCE_NAMES.get(sid, sid)
                     )
+                columns = [
+                    "Название",
+                    "Источник",
+                    "Темы",
+                    "Ссылка",
+                    "Резюме",
+                    "Проверка",
+                ]
+
+                df = df[[column for column in columns if column in df.columns]]
                 st.dataframe(
                     df,
                     use_container_width=True,
@@ -388,6 +412,41 @@ with tab_search:
                 st.warning(f"Не удалось прочитать файл журнала: {exc}")
         else:
             st.caption("Файл журнала не найден — записи выводятся в терминал, где запущен Streamlit.")
+
+with tab_collection:
+    st.header("Моя подборка")
+    st.caption("«Сохранить» добавляет статью в подборку. «Просмотрено» — отдельная ручная отметка; переход по ссылке не устанавливает её автоматически.")
+    collection = st.session_state["reading_list"]
+    st.download_button("Скачать подборку и отметки (JSON)", export_collection(collection), file_name="reading_list.json", mime="application/json")
+    uploaded = st.file_uploader("Восстановить подборку из JSON", type=["json"])
+    if uploaded is not None and st.button("Загрузить и объединить"):
+        try:
+            restored = import_collection(uploaded.getvalue())
+            for key, item in restored.items():
+                old = collection.get(key, {})
+                item["saved"] = item["saved"] or bool(old.get("saved"))
+                item["read"] = item["read"] or bool(old.get("read"))
+                collection[key] = item
+            st.success(f"Загружено записей: {len(restored)}")
+            st.rerun()
+        except ValueError as exc:
+            st.error(str(exc))
+    section = st.radio("Показать", ["Сохранённые", "Просмотренные", "Все отметки"], horizontal=True)
+    personal_items = list(collection.values())
+    if section == "Сохранённые":
+        personal_items = [r for r in personal_items if r.get("saved")]
+    elif section == "Просмотренные":
+        personal_items = [r for r in personal_items if r.get("read")]
+    if not personal_items:
+        st.info("Здесь появятся статьи, которые вы сохраните или отметите как просмотренные в поиске.")
+    for r in personal_items:
+        with st.expander(str(r.get("title") or "Без названия")):
+            st.markdown(f"[Открыть публикацию]({r['url']})")
+            st.caption("Источник: " + SOURCE_NAMES.get(r.get("source"), r.get("source", "")))
+            st.write("Темы: " + ", ".join(r.get("matched_topics", [])))
+            _reading_controls(r, "collection")
+            st.write(r.get("summary") or "Резюме отсутствует")
+    st.info("При потере сеанса отметки могут исчезнуть. Скачайте JSON перед закрытием приложения. Файл позволяет восстановить подборку в новом сеансе или на другом устройстве.")
 
 with tab_providers:
     st.header("Провайдеры модели")
@@ -441,21 +500,9 @@ with tab_providers:
     st.info("Настройки применяются только к вашему сеансу. Сохранение общей конфигурации через web-интерфейс отключено. Серверные ключи задаются владельцем приложения в Secrets.")
 
 with tab_diagram:
-    components.html("""
-    <style>body{font:16px system-ui;color:#172554;background:#f8fafc;padding:16px}
-    .box{border:1px solid #94a3b8;border-radius:12px;padding:16px;text-align:center;background:white}
-    .arrow{text-align:center;color:#64748b;font-size:24px;padding:5px}.sources{display:flex;gap:8px;flex-wrap:wrap;justify-content:center}.sources span{background:#dbeafe;padding:8px;border-radius:8px}</style>
-    <div class="box">Пользователь · темы, даты, источники, режим проверки</div><div class="arrow">↓</div>
-    <div class="box">Оркестратор main.py → координатор scraper.py</div><div class="arrow">↓</div>
-    <div class="box sources"><span>archive.org</span><span>arXiv</span><span>PubMed</span><span>Europe PMC</span><span>Semantic Scholar</span></div><div class="arrow">↓</div>
-    <div class="box">Единый формат записи → проверка истории → валидатор<br>Совпадение слов ИЛИ LLM: название + аннотация</div><div class="arrow">↓</div>
-    <div class="box">Принятые статьи и совпавшие темы → резюме Sumy / LLM</div><div class="arrow">↓</div>
-    <div class="box">Карточки · таблица · фильтр и сортировка по темам</div>
-    """, height=630, scrolling=True)
-    st.subheader("Роли компонентов")
-    st.write("Пользователь → оркестратор (main.py) → координатор (scraper.py)")
-    st.write("Источники: " + ", ".join(SOURCE_NAMES.values()))
-    st.write("Каждый источник: запрос API → единый формат записи → проверка истории → валидатор")
-    st.write("Валидатор: совпадение слов ИЛИ LLM-проверка названия и аннотации → совпавшие темы и объяснение")
-    st.write("Принятые записи → суммаризатор (Sumy или LLM) → карточки и таблица → фильтр по темам")
-    st.caption("Порядок этапов задан Python-кодом. LLM не выбирает инструменты. Почтовая отправка в интерфейсе отключена.")
+    diagram_path = Path(__file__).parent / "diagr" / "agents.html"
+    if diagram_path.is_file():
+        components.html(diagram_path.read_text(encoding="utf-8"), height=1000, scrolling=True)
+    else:
+        st.info("Схема недоступна.")
+    st.caption("В web-сеансе сохранённые и просмотренные статьи находятся во вкладке «Моя подборка». Общая история координатора в web-поиске отключена.")
